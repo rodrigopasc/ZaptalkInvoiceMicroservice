@@ -1,0 +1,46 @@
+service: zaptalk-invoice-microservice
+
+plugins:
+  - serverless-pseudo-parameters
+
+custom:
+  secrets: ${file(secrets.json)}
+
+provider:
+  name: aws
+  runtime: nodejs10.x
+  stage: dev
+  region: ${self:custom.secrets.aws.region}
+  memorySize: 128
+  tracing:
+    lambda: true
+  environment:
+    accountId: ${self:custom.secrets.aws.accountId}
+    region: ${self:custom.secrets.aws.region}
+    bucket: ${self:custom.secrets.aws.bucket}
+    snsTopicToListen: ${self:custom.secrets.aws.snsTopicToListen}
+    snsTopicErrorHandling: ${self:custom.secrets.aws.snsTopicErrorHandling}
+    notificationSNS: ${self:custom.secrets.aws.notificationSNS}
+    loggerSNS: ${self:custom.secrets.aws.loggerSNS}
+  iamRoleStatements:
+    - Effect: "Allow"
+      Resource: "*"
+      Action:
+        - "sns:*"
+    - Effect: Allow
+      Action:
+        - s3:PutObject
+        - s3:PutObjectAcl
+        - s3:GetObject
+      Resource: "arn:aws:s3:::${self:custom.secrets.aws.bucket}/*"
+
+functions:
+  invoice:
+    handler: invoice.handle
+    events:
+      - sns: ${self:custom.secrets.aws.snsTopicToListen}
+    onError: arn:aws:sns:#{AWS::Region}:#{AWS::AccountId}:${self:custom.secrets.aws.snsTopicErrorHandling}
+  error:
+    handler: error.handle
+    events:
+      - sns: ${self:custom.secrets.aws.snsTopicErrorHandling}
